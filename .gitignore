@@ -10,8 +10,7 @@ venv/
 # Data
 data/
 
-# Model weights
-*.pth
+
 
 # OS files
 .DS_Store
