@@ -1,26 +1,10 @@
-"""
-src/model.py
-
-Arsitektur Deep 2D CNN untuk Speech Emotion Recognition berbasis
-Mel-Spectrogram. Terdiri dari 4 blok konvolusi:
-    Conv2d -> BatchNorm2d -> ReLU -> MaxPool2d
-diikuti oleh fully-connected layers dengan Dropout untuk regularisasi.
-"""
-
 import torch
 import torch.nn as nn
 
 
 class EmotionCNN(nn.Module):
     def __init__(self, num_classes: int = 8, n_mels: int = 128, max_len: int = 200, dropout: float = 0.5):
-        """
-        Args:
-            num_classes : jumlah kelas emosi output (default 8)
-            n_mels      : tinggi input (jumlah mel bands), harus sama dengan
-                          n_mels yang dipakai saat preprocessing
-            max_len     : lebar input (jumlah frame waktu)
-            dropout     : probabilitas dropout pada FC layers
-        """
+       
         super(EmotionCNN, self).__init__()
 
         # ---- Blok 1: 1 -> 32 channel ----
@@ -55,9 +39,7 @@ class EmotionCNN(nn.Module):
             nn.MaxPool2d(kernel_size=2),
         )
 
-        # Hitung ukuran flatten SECARA DINAMIS dengan forward pass dummy.
-        # Ini penting agar kode tidak mudah error saat n_mels/max_len berubah
-        # (hardcoding angka di sini adalah sumber bug paling umum pada CNN audio).
+       
         self._flatten_size = self._compute_flatten_size(n_mels, max_len)
 
         self.classifier = nn.Sequential(
@@ -84,10 +66,7 @@ class EmotionCNN(nn.Module):
         return x
 
     def forward(self, x):
-        """
-        Input  : x shape [batch, 1, n_mels, time_steps]
-        Output : logits shape [batch, num_classes]
-        """
+       
         x = self._forward_conv(x)
         x = x.view(x.size(0), -1)  # flatten
         x = self.classifier(x)

@@ -1,9 +1,3 @@
-"""
-app.py
-
-Aplikasi Streamlit untuk Speech Emotion Recognition,
-menggunakan EmotionCNN (Deep 2D CNN) + Mel-Spectrogram.
-"""
 
 import os
 import sys
@@ -12,14 +6,13 @@ import tempfile
 import streamlit as st
 import torch
 
-# Tambahkan root folder project ke sys.path agar import "src.xxx" berhasil
+
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from src.model import EmotionCNN
 from src.preprocessing import extract_melspectrogram
 
-# Urutan label INI HARUS SAMA PERSIS dengan urutan label saat training
-# (dicetak otomatis oleh train.py di akhir proses training).
+
 emotion_labels = ["angry", "calm", "disgust", "fearful", "happy", "neutral", "sad", "surprised"]
 
 N_MELS = 128
@@ -130,7 +123,7 @@ with col2:
         unsafe_allow_html=True,
     )
 
-# Load model dengan penanganan error jika file .pth belum ada
+
 try:
     model = load_model()
 except FileNotFoundError:
@@ -153,16 +146,14 @@ else:
         if mel_db is None:
             st.error("Tidak dapat mengekstrak fitur dari audio yang dikirim.")
         else:
-            # Normalisasi per-sampel, HARUS SAMA dengan yang dilakukan di dataset.py
-            # saat training, agar distribusi input konsisten (train vs inference).
+            
             mean = mel_db.mean()
             std = mel_db.std() + 1e-6
             mel_db_norm = (mel_db - mean) / std
 
-            # Bentuk tensor akhir: [batch=1, channel=1, n_mels=128, time_steps]
+           
             x = torch.tensor(mel_db_norm, dtype=torch.float32)
-            x = x.unsqueeze(0).unsqueeze(0).to(device)  # [1, 1, 128, time_steps]
-
+            x = x.unsqueeze(0).unsqueeze(0).to(device)  
             with torch.no_grad():
                 output = model(x)
                 probs = torch.softmax(output, dim=1)

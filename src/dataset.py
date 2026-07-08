@@ -1,11 +1,3 @@
-"""
-src/dataset.py
-
-Custom PyTorch Dataset untuk Speech Emotion Recognition berbasis
-Mel-Spectrogram 2D. Setiap sampel dikembalikan dalam bentuk tensor
-[1, n_mels, time_steps] -> dimensi channel=1 dibutuhkan oleh Conv2D.
-"""
-
 import numpy as np
 import os
 import torch
@@ -15,16 +7,7 @@ from src.preprocessing import extract_melspectrogram, random_augment
 
 
 class SEREmotionDataset(Dataset):
-    """
-    Args:
-        file_paths (list[str]) : daftar path file .wav
-        labels     (list[int]) : label kelas (integer) untuk setiap file
-        train      (bool)      : jika True, augmentasi acak diterapkan
-                                  setiap kali sampel diambil (on-the-fly).
-                                  Jika False (val/test), tidak ada augmentasi.
-        max_len    (int)       : panjang frame waktu tetap
-        n_mels     (int)       : jumlah mel bands
-    """
+ 
 
     def __init__(self, file_paths, labels, train=True, max_len=200, n_mels=128):
         assert len(file_paths) == len(labels), "Jumlah file_paths dan labels harus sama"
@@ -41,9 +24,7 @@ class SEREmotionDataset(Dataset):
         file_path = self.file_paths[idx]
         label = self.labels[idx]
 
-        # Augmentasi HANYA diterapkan pada mode training, dan dipilih
-        # secara acak setiap kali sampel ini diambil (bukan sekali di awal),
-        # sehingga model melihat variasi berbeda di setiap epoch.
+        
         augment_fn = random_augment if self.train else None
 
         mel_db = extract_melspectrogram(
@@ -54,19 +35,15 @@ class SEREmotionDataset(Dataset):
         )
 
         if mel_db is None:
-            # Fallback: jika file gagal dibaca, kembalikan tensor kosong (nol)
-            # agar training tidak crash. Sebaiknya file bermasalah dicek manual.
+            
             mel_db = np.zeros((self.n_mels, self.max_len), dtype=np.float32)
 
-        # Normalisasi per-sampel (zero mean, unit variance).
-        # Ini bukan bagian dari requirement eksplisit, tetapi sangat disarankan
-        # karena nilai dB mentah bisa bervariasi rentangnya antar file,
-        # sehingga training CNN + BatchNorm menjadi lebih stabil.
+        
         mean = mel_db.mean()
         std = mel_db.std() + 1e-6
         mel_db = (mel_db - mean) / std
 
-        # Tambahkan dimensi channel -> [1, n_mels, time_steps]
+       
         feature = torch.tensor(mel_db, dtype=torch.float32).unsqueeze(0)
         label_tensor = torch.tensor(label, dtype=torch.long)
 
@@ -74,13 +51,7 @@ class SEREmotionDataset(Dataset):
 
 
 def load_ravdess_files(data_dir: str):
-    """
-    Utility: Telusuri `data_dir` secara rekursif dan kembalikan daftar
-    file .wav beserta label string sesuai konvensi penamaan RAVDESS.
-
-    Returns:
-        (file_paths, label_strs)
-    """
+    
     RAVDESS_EMOTION_MAP = {
         "01": "neutral",
         "02": "calm",
@@ -106,3 +77,14 @@ def load_ravdess_files(data_dir: str):
             label_strs.append(RAVDESS_EMOTION_MAP[parts[2]])
 
     return file_paths, label_strs
+
+
+def extract_actor_id(file_path: str) -> str:
+    
+    fname = os.path.basename(file_path)
+    parts = fname.split("-")
+    if len(parts) < 7:
+        return "unknown"
+    actor_part = parts[6]
+    actor_id = os.path.splitext(actor_part)[0]
+    return actor_id

@@ -1,25 +1,3 @@
-"""
-train.py
-
-Script training untuk EmotionCNN (Deep 2D CNN berbasis Mel-Spectrogram).
-
-ASUMSI DATASET:
-Karena daftar `emotion_labels` yang Anda berikan
-    ['angry', 'calm', 'disgust', 'fearful', 'happy', 'neutral', 'sad', 'surprised']
-persis sama dengan 8 kelas emosi pada dataset RAVDESS (diurutkan alfabetis),
-script ini diasumsikan menggunakan struktur penamaan file RAVDESS, contoh:
-    03-01-06-01-02-01-12.wav
-    (kode emosi ada di posisi ke-3: 06 = fearful)
-
-Jika Anda menggunakan dataset lain (mis. CREMA-D, atau folder per-kelas seperti
-    data/angry/xxx.wav, data/happy/yyy.wav, dst.),
-CUKUP GANTI fungsi `gather_dataset_files()` di bawah ini sesuai struktur folder Anda.
-Bagian training loop TIDAK perlu diubah.
-
-Cara menjalankan:
-    python train.py --data_dir data/RAVDESS --epochs 50
-"""
-
 import os
 import copy
 import argparse
@@ -27,12 +5,12 @@ import argparse
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import GroupShuffleSplit
 
-from src.dataset import SEREmotionDataset, load_ravdess_files
+from src.dataset import SEREmotionDataset, load_ravdess_files, extract_actor_id
 from src.model import EmotionCNN
 
-# Mapping kode emosi RAVDESS (posisi ke-3 pada nama file) -> nama emosi
+
 RAVDESS_EMOTION_MAP = {
     "01": "neutral",
     "02": "calm",
@@ -45,7 +23,7 @@ RAVDESS_EMOTION_MAP = {
 }
 
 
-# Dataset discovery is provided by `load_ravdess_files()` in `src/dataset.py`.
+
 
 
 def train_model(args):
@@ -60,7 +38,7 @@ def train_model(args):
             "gather_dataset_files() di train.py dengan struktur dataset Anda."
         )
 
-    # Urutkan label secara alfabetis agar konsisten dengan app.py
+    
     emotion_labels = sorted(list(set(label_strs)))
     label_to_idx = {label: i for i, label in enumerate(emotion_labels)}
     labels = [label_to_idx[l] for l in label_strs]
@@ -68,9 +46,22 @@ def train_model(args):
     print(f"Total sampel ditemukan : {len(file_paths)}")
     print(f"Mapping label -> index : {label_to_idx}")
 
-    train_paths, val_paths, train_labels, val_labels = train_test_split(
-        file_paths, labels, test_size=0.2, random_state=42, stratify=labels
-    )
+
+    actor_ids = [extract_actor_id(p) for p in file_paths]
+
+    gss = GroupShuffleSplit(n_splits=1, test_size=0.2, random_state=42)
+    train_idx, val_idx = next(gss.split(file_paths, labels, groups=actor_ids))
+
+    train_paths = [file_paths[i] for i in train_idx]
+    val_paths = [file_paths[i] for i in val_idx]
+    train_labels = [labels[i] for i in train_idx]
+    val_labels = [labels[i] for i in val_idx]
+
+    train_actors = sorted(set(actor_ids[i] for i in train_idx))
+    val_actors = sorted(set(actor_ids[i] for i in val_idx))
+    print(f"Aktor di training ({len(train_actors)}): {train_actors}")
+    print(f"Aktor di validation ({len(val_actors)}): {val_actors}")
+    assert set(train_actors).isdisjoint(val_actors), "Ada aktor yang bocor antara train dan val!"
 
     train_dataset = SEREmotionDataset(
         train_paths, train_labels, train=True, max_len=args.max_len, n_mels=args.n_mels
@@ -93,7 +84,7 @@ def train_model(args):
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=1e-5)
 
-    # ReduceLROnPlateau: turunkan learning rate saat val accuracy stagnan
+    
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode="max", factor=0.5, patience=3
     )
@@ -142,7 +133,7 @@ def train_model(args):
         val_loss = val_running_loss / val_total
         val_acc = val_correct / val_total
 
-        # Scheduler dipantau berdasarkan val accuracy (mode='max')
+       
         scheduler.step(val_acc)
         current_lr = optimizer.param_groups[0]["lr"]
 
@@ -152,7 +143,7 @@ def train_model(args):
             f"Val Loss: {val_loss:.4f} Val Acc: {val_acc:.4f} | LR: {current_lr:.6f}"
         )
 
-        # ---------------- Checkpoint + Early Stopping ----------------
+        
         if val_acc > best_val_acc:
             best_val_acc = val_acc
             best_model_wts = copy.deepcopy(model.state_dict())

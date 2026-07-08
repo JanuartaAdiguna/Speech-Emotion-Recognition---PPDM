@@ -9,29 +9,31 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix, classification_report
 import seaborn as sns
 from sklearn.preprocessing import LabelEncoder
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import GroupShuffleSplit
 from torch.utils.data import DataLoader
 
-# Import project modules
-from src.dataset import load_ravdess_files, SEREmotionDataset
+
+from src.dataset import load_ravdess_files, SEREmotionDataset, extract_actor_id
 from src.model import EmotionCNN
 
 
 def evaluate(data_dir: str, model_path: str, batch_size: int = 32, n_mels: int = 128, max_len: int = 200):
-    # Load dataset files and string labels using the same RAVDESS loader
+    
     file_paths, label_strs = load_ravdess_files(data_dir)
     if len(file_paths) == 0:
         raise RuntimeError(f"Tidak ada file .wav yang cocok ditemukan di '{data_dir}'.")
 
-    # Ensure consistent label ordering (same as training: sorted unique)
+    
     emotion_labels = sorted(list(set(label_strs)))
     label_to_idx = {label: i for i, label in enumerate(emotion_labels)}
     labels = [label_to_idx[l] for l in label_strs]
 
-    # Final split: reserve 20% for test (same as train.py)
-    _, X_test, _, y_test = train_test_split(
-        file_paths, labels, test_size=0.2, random_state=42, stratify=labels
-    )
+    
+    actor_ids = [extract_actor_id(p) for p in file_paths]
+    gss = GroupShuffleSplit(n_splits=1, test_size=0.2, random_state=42)
+    _, test_idx = next(gss.split(file_paths, labels, groups=actor_ids))
+    X_test = [file_paths[i] for i in test_idx]
+    y_test = [labels[i] for i in test_idx]
 
     test_dataset = SEREmotionDataset(X_test, y_test, train=False, max_len=max_len, n_mels=n_mels)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=0)
@@ -58,7 +60,7 @@ def evaluate(data_dir: str, model_path: str, batch_size: int = 32, n_mels: int =
             all_labels.extend(targets.numpy().tolist())
 
     print("\n✅ Classification Report:\n")
-    # Map indices back to label names for reporting
+    
     print(classification_report(all_labels, all_preds, target_names=emotion_labels))
 
     cm = confusion_matrix(all_labels, all_preds)
